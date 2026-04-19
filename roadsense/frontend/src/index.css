@@ -1,0 +1,44 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --color-rs-bg: #05070a;
+  --color-rs-panel: rgba(12, 16, 24, 0.82);
+  --color-rs-accent: #3b82f6;
+  --color-rs-danger: #ef4444;
+  --color-rs-warn: #eab308;
+  --color-rs-safe: #22c55e;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #app {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    @apply bg-[#05070a] text-slate-100 antialiased;
+    font-family: var(--font-sans);
+  }
+}
+
+/* MapLibre overrides */
+.maplibregl-ctrl-bottom-right {
+  @apply opacity-90;
+}
+
+.rs-scene3d {
+  flex: 1;
+  width: 100%;
+  min-height: 420px;
+  position: relative;
+}
+.rs-scene3d canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}

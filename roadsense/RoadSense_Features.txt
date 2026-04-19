@@ -1,0 +1,311 @@
+================================================================
+  ROADSENSE — APPLICATION OVERVIEW & FEATURE LIST
+================================================================
+  Full-Stack AI-Powered Road Safety Dashboard
+  Frontend: React + Three.js  |  Backend: FastAPI (Python)
+  Port: 5173 (frontend)  |  8010 (backend API + WebSocket)
+================================================================
+
+
+────────────────────────────────────────────────────────────────
+  WHAT THE APPLICATION DOES
+────────────────────────────────────────────────────────────────
+
+RoadSense is a real-time road safety intelligence platform
+designed to detect wrong-way drivers, predict collisions, and
+guide drivers to safety. It combines a 3D driving simulation
+with a live map, backend AI analysis, and multi-sensor data
+fusion to replicate what an advanced driver assistance system
+(ADAS) would do on real roads.
+
+The app simulates an ego vehicle (your car) traveling through
+Bengaluru, India, on a real road network. It monitors traffic
+around you, detects anomalies, and alerts you instantly when
+danger is detected.
+
+
+────────────────────────────────────────────────────────────────
+  DASHBOARD TABS
+────────────────────────────────────────────────────────────────
+
+1. DRIVE (Home Tab)
+   - Car model display with ambient lighting effects
+   - Quick-action buttons: Entertainment (YouTube), Phone,
+     Vehicle Settings, System Status
+   - Cabin temperature display
+   - System Online status indicator
+
+2. ROUTE (Navigation Tab)
+   - Split view: Live Map (left 30%) + 3D Simulation (right 70%)
+   - Route planner with From/To search fields (Bengaluru landmarks)
+   - Use current GPS location button
+   - Real OSRM-powered driving route calculation
+   - Live ego vehicle position marker on map
+   - Route polyline with blue glow on MapLibre dark map
+   - Route-ahead highlight showing upcoming road curve
+   - Turn-by-turn navigation instructions
+   - Remaining distance and ETA display
+   - Road warning overlay on map when danger detected
+
+3. SAFETY (Safety Tab)
+   - Nearby Danger Radar — proximity visualization of nearby vehicles
+   - Wrong-way detection status with confidence percentage
+   - Heading delta display (current vs expected bearing)
+   - Detector Simulator panel:
+     - Start/Stop scenario buttons
+     - 3 predefined attack scenarios
+     - Consensus mode toggle (ON/OFF)
+     - Active alerts grid
+     - Recent detector events list
+     - Vehicle count, alert count, closest vehicle metrics
+
+4. INTEL (Intelligence Tab)
+   - Live telemetry: speed (km/h), bearing, lane, ETA
+   - Recovery Route Vector when wrong-way is detected
+   - Road Intelligence card:
+     - Historical traffic direction for current road segment
+     - Dominant flow direction and confidence score
+     - Time-slot analysis (4-hour buckets)
+     - Road warning reason
+   - Privacy note: federated learning layer active
+
+
+────────────────────────────────────────────────────────────────
+  3D DRIVING SIMULATION (Three.js)
+────────────────────────────────────────────────────────────────
+
+- Real-time 3D road rendered with road slices, lane markings,
+  center divider (yellow), and boundary lines (white)
+- Fog and dark night-sky atmosphere
+- Player car (red) with cabin mesh and body
+- FREE STEERING: Arrow Left/Right or A/D keys move car smoothly
+  within road bounds (clamped to right lane area: x = 0 to 3)
+- Forward speed driven by backend speed data with smooth ramp
+- Road curves dynamically based on real route geometry
+- Camera follows ego car with smooth lerp
+- Lane guide lines change color (blue → red) when wrong lane
+
+NPC Traffic:
+- Same-direction cars (grey) always in RIGHT lane, 50–120 m ahead
+- Oncoming cars (red) always in LEFT lane, periodic spawn
+- Both types have realistic follow-distance and speed logic
+- Cars stop when collision is active
+
+Collision System:
+- Continuous AABB collision detection (dx < 1.5, dz < 3)
+- Works for both same-direction and oncoming vehicles
+- Also checks external vehicles from backend API
+
+Collision Alert UI (full-screen overlay):
+- "⚡ COLLISION DETECTED" in large red text with glow
+- Siren animation (red/amber alternating glow) on warning icon
+- 5-second countdown: "Notifying in X.X s..."
+- After 5 seconds: "✅ AUTHORITIES NOTIFIED — Help is on the way"
+- RESET button clears collision, removes all NPC cars,
+  respawns fresh traffic, and returns player to right lane
+
+Wrong-Way Banner:
+- "⚠️ WRONG WAY ⚠️" banner at top-center of 3D view
+- Appears when player drives in wrong lane for > 1 second
+- Blinking animation with red glow and backdrop blur
+- Also triggered by backend consensus analysis
+
+Speed HUD (top-left of 3D view):
+- Live speed in km/h
+- Current lane label
+- Traffic density indicator (green = low, yellow = medium, red = high)
+
+
+────────────────────────────────────────────────────────────────
+  WRONG-WAY DETECTION SYSTEM
+────────────────────────────────────────────────────────────────
+
+Two independent detection layers work together:
+
+Layer 1 — Local Lane Analysis (frontend):
+  - Counts same-direction vs opposite-direction vehicles
+    in the ego's current lane within a proximity window
+  - If more opposite-direction cars than same-direction → wrong lane
+  - 1-second debounce prevents flickering false positives
+
+Layer 2 — Traffic Flow Consensus (backend AI):
+  - Analyzes bearings of all nearby vehicles (within 90 m)
+  - Computes circular mean of peer headings (majority direction)
+  - Triggers if ego bearing deviates > 140° from majority flow
+  - Requires minimum 3 nearby vehicles at 10+ km/h
+  - Confidence = (delta/180)*70 + majority_support*30
+  - GPS noise guard: suppresses if GPS accuracy > 35 m AND
+    confidence < 55%
+  - Combined signal: wrongWayCombined = API.active OR localLane
+
+
+────────────────────────────────────────────────────────────────
+  BACKEND AI PIPELINE (/frontend-sim endpoint)
+────────────────────────────────────────────────────────────────
+
+Every 900 ms the frontend POSTs ego state + all vehicle positions.
+The backend runs the full safety analysis pipeline:
+
+1. Proximity filter — finds vehicles within 90 m radius
+2. Traffic flow analysis — wrong-way detection via consensus
+3. GPS noise guard — softens result if GPS accuracy is poor
+4. Road passage recording — writes to SQLite (road_usage.db)
+   with directional octant encoding (E0–E7)
+5. Road intelligence query — historical dominant flow direction
+   for the current road segment + time-of-day bucket
+6. Flow opposition check — warns if user direction opposes
+   historical majority flow
+7. Collision bundle dispatch — if wrong-way active, computes
+   Time-to-Collision (TTC), closing speed, and risk scores
+   for nearby vehicles + synthetic pedestrians
+8. Correction route suggestion — alternate path when wrong-way
+
+Returns: wrong_way, collision_bundle, road_intelligence,
+         road_warning, correction_route, time_slot
+
+
+────────────────────────────────────────────────────────────────
+  WRONG-WAY DETECTOR SIMULATOR (Backend Scenarios)
+────────────────────────────────────────────────────────────────
+
+3 predefined attack scenarios run on the backend road network
+(Bengaluru road graph loaded from OpenStreetMap):
+
+Scenario 1 — "The Near-Miss"
+  Normal traffic + one high-speed wrong-way intruder
+  Tests predictive alerting and TTC calculation
+
+Scenario 2 — "The Diversion"
+  Diversion traffic using wrong direction
+  Tests crowd consensus suppression (should NOT alert)
+
+Scenario 3 — "Urban Grid"
+  Wrong-way vehicles on city streets (not highways)
+  Tests detection on bidirectional road networks
+
+Detection engine uses:
+  - Heading mismatch threshold: 120°
+  - Persistence window: 2.5 seconds before alert
+  - Suspicion threshold: 80° at low speed (< 25 km/h)
+  - Crowd consensus: 70% agreement over 60-second window
+  - Alert radius: 500 m for at-risk vehicle scanning
+  - Confidence scoring with attack classification
+
+
+────────────────────────────────────────────────────────────────
+  LIVE DATA CONNECTIONS
+────────────────────────────────────────────────────────────────
+
+REST API (http://127.0.0.1:8010):
+  GET  /health          — backend status + road graph loaded
+  GET  /scenarios       — list of 3 detector scenarios
+  GET  /api/traffic     — live vehicle positions (polled every 500 ms)
+  GET  /status          — simulator stats + bridge metrics
+  POST /frontend-sim    — submit ego + vehicles, get safety analysis
+  POST /start           — start a detector scenario
+  POST /stop            — stop running scenario
+  POST /consensus       — toggle crowd consensus mode
+  GET  /road-intelligence/{id} — historical segment data
+  POST /offline/predict — GPS-dead-reckoning prediction
+
+WebSocket (ws://127.0.0.1:8010/ws):
+  Real-time stream of:
+  - tick: vehicle positions, new alerts, active alerts
+  - safety_update: wrong-way + collision data
+  - sim_ended: scenario finished
+
+Traffic API response fields:
+  vehicles[]: id, lane, t (0–1 route fraction), dir (1/-1),
+              speed (km/h), position (meters)
+  traffic: density ("low"/"medium"/"high"), alerts[]
+
+
+────────────────────────────────────────────────────────────────
+  KEYBOARD CONTROLS
+────────────────────────────────────────────────────────────────
+
+  SPACE         — Toggle driving on/off
+  Arrow Up      — Accelerate
+  Arrow Down    — Decelerate / brake
+  Arrow Left    — Steer left (3D scene)
+  Arrow Right   — Steer right (3D scene)
+  A / D         — Steer left / right (3D scene)
+  R             — Reset to right lane
+
+
+────────────────────────────────────────────────────────────────
+  ADDITIONAL FEATURES
+────────────────────────────────────────────────────────────────
+
+Auto Drive Mode:
+  - Toggle button in top-right corner
+  - Adaptive cruise control: follows car ahead (< 70 m gap)
+  - Speed limit: 85 km/h
+  - Smooth speed matching with lead vehicle
+
+Route Planning:
+  - Geocode Bengaluru landmarks by name
+  - OSRM routing engine for real driving paths
+  - Turn-by-turn steps extracted from route
+  - Offline route caching (IndexedDB via offlineMode service)
+  - Last sync time displayed
+
+Offline Mode:
+  - Detects navigator.onLine status
+  - Caches route polyline for offline use
+  - GPS dead-reckoning prediction via /offline/predict
+  - Offline badge shown when disconnected
+
+Map Layers:
+  - Dark CARTO basemap
+  - Route polyline (blue glow)
+  - Route-ahead highlight (brighter blue, dynamic)
+  - Ego vehicle dot (blue circle with white border)
+  - Danger zone pulse (red halo when wrong-way/collision)
+  - Detector vehicle dots (blue=normal, amber=suspicion, red=alert)
+  - Alert markers for active wrong-way detections
+
+Error Handling:
+  - Traffic API offline → flushes vehicles, shows "OFFLINE" density
+  - Backend unreachable → "offline" health state, graceful degradation
+  - WebSocket disconnect → auto-reconnect after 2 seconds
+  - Route geocode failure → user-friendly error message
+  - All API calls wrapped in try/catch with UI feedback
+
+Performance:
+  - Three.js RAF loop decoupled from React render cycle
+  - Map updates throttled to max 1 per 350 ms
+  - Dead reckoning interpolates vehicle positions between API polls
+  - Road geometry uses ribbon buffers (not recreated per frame)
+  - NPC car pool reuse (no mesh recreation on respawn)
+
+
+────────────────────────────────────────────────────────────────
+  TECH STACK
+────────────────────────────────────────────────────────────────
+
+Frontend:
+  React 18 + TypeScript + Vite
+  Three.js (3D simulation)
+  MapLibre GL (2D map)
+  Zustand (safety state store)
+  Tailwind CSS (styling)
+  Lucide React (icons)
+
+Backend:
+  FastAPI (Python)
+  NetworkX (road graph)
+  OSMnx / OpenStreetMap (Bengaluru road network)
+  SQLite (road_usage.db — historical traffic learning)
+  WebSockets (real-time vehicle streaming)
+  Pydantic (request/response validation)
+
+External Services:
+  OSRM (Open Source Routing Machine) — driving routes
+  CARTO dark tiles — map basemap
+  Nominatim / local geocoding — place name lookup
+
+
+================================================================
+  Generated: RoadSense Project Documentation
+================================================================

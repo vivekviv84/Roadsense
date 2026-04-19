@@ -1,0 +1,12 @@
+osmnx>=1.8.0
+networkx>=3.3
+shapely>=2.0.5
+pyproj>=3.6.1
+numpy>=1.26.4
+pandas>=2.2.2
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.1
+websockets>=12.0
+pydantic>=2.7.1
+scipy>=1.13.1
+requests>=2.32.3

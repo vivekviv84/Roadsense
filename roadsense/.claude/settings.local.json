@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from backend.core.osm_validator import get_road_direction, check_ego_against_osm; print\\('OK'\\)\")"
+    ]
+  }
+}
