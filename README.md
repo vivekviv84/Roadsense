@@ -277,9 +277,3 @@ roadsense/
 - [ ] Edge deployment for embedded in-car systems
 - [ ] Distributed road intelligence across multiple cities
 - [ ] Mobile app with live map overlay
-
----
-
-## License
-
-[MIT](LICENSE) · Built by **Neha Shetty**
